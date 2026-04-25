@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package nova.longpolling;
+
+option java_package = "com.nova.pollink.server.proto";
+option java_outer_classname = "NodeProto";
+
+service NodeService {
+  // 双向流：节点间建立持久连接
+  rpc Stream(stream NodeMessage) returns (stream NodeMessage);
+}
+
+message NodeMessage {
+  MessageType type = 1;
+  string dataId = 2;
+  DataType dataType = 3;
+  string topic = 4;
+}
+
+enum MessageType {
+  UNKNOWN_TYPE = 0;
+  DATA_NOTIFY = 1;
+  HEARTBEAT = 2;
+}
+
+enum DataType {
+  UNKNOWN_DATA = 0;
+  MESSAGE = 1;
+  CONFIG = 2;
+}
