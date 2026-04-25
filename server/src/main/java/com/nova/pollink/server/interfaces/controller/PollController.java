@@ -2,18 +2,18 @@ package com.nova.pollink.server.interfaces.controller;
 
 import com.nova.pollink.server.application.service.MessageService;
 import com.nova.pollink.server.application.service.ConfigService;
+import com.nova.pollink.server.config.GracefulShutdownConfig;
 import com.nova.pollink.server.domain.entity.Message;
 import com.nova.pollink.server.domain.entity.Config;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 长轮询控制器。
@@ -26,19 +26,21 @@ public class PollController {
     private final MessageService messageService;
     private final ConfigService configService;
     private final int pollTimeoutSeconds;
+    private final GracefulShutdownConfig gracefulShutdownConfig;
 
     /**
      * 存储等待中的轮询请求：key = "topic:clientId", value = DeferredResult
      */
     private final Map<String, DeferredResult<?>> pendingPolls = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService timeoutExecutor = Executors.newScheduledThreadPool(4);
 
     public PollController(MessageService messageService,
                           ConfigService configService,
-                          @Value("${nova.server.poll-timeout-seconds:30}") int pollTimeoutSeconds) {
+                          @Value("${nova.server.poll-timeout-seconds:30}") int pollTimeoutSeconds,
+                          GracefulShutdownConfig gracefulShutdownConfig) {
         this.messageService = messageService;
         this.configService = configService;
         this.pollTimeoutSeconds = pollTimeoutSeconds;
+        this.gracefulShutdownConfig = gracefulShutdownConfig;
     }
 
     /**
@@ -55,6 +57,13 @@ public class PollController {
             @RequestParam String topic,
             @RequestParam(required = false, defaultValue = "0") Long lastId) {
 
+        // Step 1 of graceful shutdown: 拒绝新的长轮询请求
+        if (!gracefulShutdownConfig.isAcceptingRequests()) {
+            DeferredResult<List<Message>> reject = new DeferredResult<>();
+            reject.setErrorResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Server is shutting down"));
+            return reject;
+        }
+
         String key = topic + ":" + clientId;
         DeferredResult<List<Message>> result = new DeferredResult<>((long) pollTimeoutSeconds * 1000);
 
@@ -65,7 +74,7 @@ public class PollController {
             return result;
         }
 
-        // 无数据时 hold 住请求
+        // 无数据时 hold 住请求，仅依赖 DeferredResult 内置超时
         pendingPolls.put(key, result);
 
         result.onCompletion(() -> pendingPolls.remove(key));
@@ -73,14 +82,6 @@ public class PollController {
             pendingPolls.remove(key);
             result.setResult(List.of());
         });
-
-        // 超时兜底：时间到后返回空列表
-        timeoutExecutor.schedule(() -> {
-            if (!result.isSetOrExpired()) {
-                pendingPolls.remove(key);
-                result.setResult(List.of());
-            }
-        }, pollTimeoutSeconds, TimeUnit.SECONDS);
 
         return result;
     }
@@ -96,6 +97,13 @@ public class PollController {
     public DeferredResult<List<Config>> pollConfigs(
             @RequestParam String clientId,
             @RequestParam(required = false, defaultValue = "0") int lastVersion) {
+
+        // Step 1 of graceful shutdown: 拒绝新的长轮询请求
+        if (!gracefulShutdownConfig.isAcceptingRequests()) {
+            DeferredResult<List<Config>> reject = new DeferredResult<>();
+            reject.setErrorResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Server is shutting down"));
+            return reject;
+        }
 
         String key = "config:" + clientId;
         DeferredResult<List<Config>> result = new DeferredResult<>((long) pollTimeoutSeconds * 1000);
@@ -114,13 +122,6 @@ public class PollController {
             result.setResult(List.of());
         });
 
-        timeoutExecutor.schedule(() -> {
-            if (!result.isSetOrExpired()) {
-                pendingPolls.remove(key);
-                result.setResult(List.of());
-            }
-        }, pollTimeoutSeconds, TimeUnit.SECONDS);
-
         return result;
     }
 
@@ -130,14 +131,34 @@ public class PollController {
      *
      * @param topic 数据 topic（配置类型传 "config"）
      */
-    @SuppressWarnings("unchecked")
+    /**
+     * 当有新数据到达时，唤醒对应 topic 的等待请求。
+     * 由 gRPC 通知或数据写入接口调用。
+     *
+     * @param topic 数据 topic（配置类型传 "config"）
+     */
     public void wakeupPendingPolls(String topic) {
         pendingPolls.forEach((key, deferred) -> {
             if (key.startsWith(topic + ":")) {
                 if (!deferred.isSetOrExpired()) {
                     // 唤醒后由客户端重新发起请求获取数据
-                    ((DeferredResult<Object>) (DeferredResult<?>) deferred).setResult(List.of());
+                    @SuppressWarnings("unchecked")
+                    DeferredResult<Object> dr = (DeferredResult<Object>) (DeferredResult<?>) deferred;
+                    dr.setResult(List.of());
                 }
+            }
+        });
+    }
+
+    /**
+     * 唤醒所有等待中的轮询请求（用于优雅关闭）。
+     */
+    public void wakeupAllPendingPolls() {
+        pendingPolls.forEach((key, deferred) -> {
+            if (!deferred.isSetOrExpired()) {
+                @SuppressWarnings("unchecked")
+                DeferredResult<Object> dr = (DeferredResult<Object>) (DeferredResult<?>) deferred;
+                dr.setResult(List.of());
             }
         });
     }

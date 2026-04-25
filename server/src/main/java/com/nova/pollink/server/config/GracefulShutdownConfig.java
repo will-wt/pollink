@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * Server 优雅关闭配置。
  * 按以下顺序处理关闭：
@@ -26,6 +28,7 @@ public class GracefulShutdownConfig implements SmartLifecycle {
     private final GrpcServerConfig grpcServerConfig;
 
     private volatile boolean running = false;
+    private final AtomicBoolean acceptingRequests = new AtomicBoolean(true);
 
     public GracefulShutdownConfig(PollController pollController,
                                   DiscoveryService discoveryService,
@@ -38,15 +41,36 @@ public class GracefulShutdownConfig implements SmartLifecycle {
     @Override
     public void start() {
         this.running = true;
+        this.acceptingRequests.set(true);
         log.info("Server graceful shutdown handler initialized");
+    }
+
+    /**
+     * 查询当前是否正在接收新的长轮询请求。
+     */
+    public boolean isAcceptingRequests() {
+        return acceptingRequests.get();
     }
 
     @Override
     public void stop() {
+        doShutdown(null);
+    }
+
+    @Override
+    public void stop(Runnable callback) {
+        doShutdown(callback);
+    }
+
+    private void doShutdown(Runnable callback) {
         log.info("Starting graceful shutdown...");
 
-        // Step 1 & 2: 唤醒所有 hold 的客户端连接（返回空，客户端会自动重连到其他节点）
-        pollController.wakeupPendingPolls("");
+        // Step 1: 停止接收新的长轮询请求
+        acceptingRequests.set(false);
+        log.info("Stopped accepting new poll requests");
+
+        // Step 2: 唤醒所有 hold 的客户端连接
+        pollController.wakeupAllPendingPolls();
 
         // Step 3: 关闭 gRPC 服务端（停止接收节点间通信）
         grpcServerConfig.stopGrpcServer();
@@ -65,6 +89,10 @@ public class GracefulShutdownConfig implements SmartLifecycle {
 
         this.running = false;
         log.info("Graceful shutdown completed");
+
+        if (callback != null) {
+            callback.run();
+        }
     }
 
     @Override

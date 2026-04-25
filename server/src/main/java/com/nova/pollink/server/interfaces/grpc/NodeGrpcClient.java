@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,6 +35,7 @@ public class NodeGrpcClient {
     /** 已建立的节点连接：key = nodeId, value = StreamObserver */
     private final Map<String, StreamObserver<NodeProto.NodeMessage>> peerStreams = new ConcurrentHashMap<>();
     private final Map<String, ManagedChannel> peerChannels = new ConcurrentHashMap<>();
+    private ScheduledExecutorService refreshExecutor;
 
     public NodeGrpcClient(DiscoveryService discoveryService,
                           @Value("${nova.server.grpc-port:9101}") int grpcPort) {
@@ -54,12 +56,19 @@ public class NodeGrpcClient {
         }).start();
 
         // 每 30 秒刷新一次连接（处理节点上下线）
-        Executors.newSingleThreadScheduledExecutor()
-            .scheduleAtFixedRate(this::refreshConnections, 10, 30, TimeUnit.SECONDS);
+        refreshExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "grpc-peer-refresh");
+            t.setDaemon(true);
+            return t;
+        });
+        refreshExecutor.scheduleAtFixedRate(this::refreshConnections, 10, 30, TimeUnit.SECONDS);
     }
 
     @PreDestroy
     public void shutdown() {
+        if (refreshExecutor != null) {
+            refreshExecutor.shutdown();
+        }
         peerChannels.values().forEach(channel -> {
             try {
                 channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
