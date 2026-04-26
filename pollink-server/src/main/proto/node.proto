@@ -24,7 +24,7 @@ enum MessageType {
 }
 
 enum DataType {
-  UNKNOWN = 0;
+  UNKNOWN_DATA = 0;
   MESSAGE = 1;
   CONFIG = 2;
 }

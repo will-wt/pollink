@@ -1,7 +1,7 @@
 package com.nova.pollink.server.interfaces.grpc;
 
 import com.nova.pollink.discovery.DiscoveryService;
-import com.nova.pollink.discovery.model.ServerNode;
+import com.nova.pollink.discovery.dal.entity.ServerNode;
 import com.nova.pollink.server.proto.NodeProto;
 import com.nova.pollink.server.proto.NodeServiceGrpc;
 import io.grpc.ManagedChannel;

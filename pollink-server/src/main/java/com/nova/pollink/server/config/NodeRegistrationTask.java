@@ -2,7 +2,7 @@ package com.nova.pollink.server.config;
 
 import com.nova.pollink.discovery.DiscoveryProperties;
 import com.nova.pollink.discovery.DiscoveryService;
-import com.nova.pollink.discovery.model.ServerNode;
+import com.nova.pollink.discovery.dal.entity.ServerNode;
 import com.nova.pollink.server.interfaces.controller.PollController;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
