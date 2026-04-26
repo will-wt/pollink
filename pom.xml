@@ -25,11 +25,11 @@
     </properties>
 
     <modules>
-        <module>discovery</module>
-        <module>server</module>
-        <module>client</module>
-        <module>admin</module>
-        <module>example</module>
+        <module>pollink-discovery</module>
+        <module>pollink-server</module>
+        <module>pollink-client</module>
+        <module>pollink-admin</module>
+        <module>pollink-example</module>
     </modules>
 
     <dependencyManagement>
