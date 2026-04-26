@@ -1,4 +1,4 @@
-package com.nova.pollink.server.domain.entity;
+package com.nova.pollink.server.dal.entity;
 
 import java.time.LocalDateTime;
 

@@ -1,6 +1,6 @@
-package com.nova.pollink.server.infrastructure.repository;
+package com.nova.pollink.server.dal.mapper;
 
-import com.nova.pollink.server.domain.entity.Message;
+import com.nova.pollink.server.dal.entity.Message;
 import org.apache.ibatis.annotations.*;
 
 import java.util.List;

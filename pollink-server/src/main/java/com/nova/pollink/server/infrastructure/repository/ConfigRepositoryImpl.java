@@ -1,6 +1,7 @@
 package com.nova.pollink.server.infrastructure.repository;
 
-import com.nova.pollink.server.domain.entity.Config;
+import com.nova.pollink.server.dal.entity.Config;
+import com.nova.pollink.server.dal.mapper.ConfigMapper;
 import com.nova.pollink.server.domain.repository.ConfigRepository;
 import org.springframework.stereotype.Repository;
 
