@@ -32,6 +32,7 @@ public class NodeGrpcClient {
 
     private final DiscoveryService discoveryService;
     private final int grpcPort;
+    private final String configuredNodeIp;
 
     /** 已建立的节点连接：key = nodeId, value = StreamObserver */
     private final Map<String, StreamObserver<NodeProto.NodeMessage>> peerStreams = new ConcurrentHashMap<>();
@@ -39,9 +40,11 @@ public class NodeGrpcClient {
     private ScheduledExecutorService refreshExecutor;
 
     public NodeGrpcClient(DiscoveryService discoveryService,
-                          @Value("${nova.pollink.server.grpc-port:9101}") int grpcPort) {
+                          @Value("${nova.pollink.server.grpc-port:9101}") int grpcPort,
+                          @Value("${nova.pollink.server.node-ip:}") String configuredNodeIp) {
         this.discoveryService = discoveryService;
         this.grpcPort = grpcPort;
+        this.configuredNodeIp = configuredNodeIp;
     }
 
     @PostConstruct
@@ -173,9 +176,13 @@ public class NodeGrpcClient {
     }
 
     private String getSelfIp() {
+        if (configuredNodeIp != null && !configuredNodeIp.isBlank()) {
+            return configuredNodeIp;
+        }
         try {
             return java.net.InetAddress.getLocalHost().getHostAddress();
         } catch (Exception e) {
+            log.warn("Failed to detect local IP, falling back to 127.0.0.1");
             return "127.0.0.1";
         }
     }

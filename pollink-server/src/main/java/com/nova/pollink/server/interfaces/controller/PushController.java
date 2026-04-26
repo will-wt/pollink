@@ -1,5 +1,7 @@
 package com.nova.pollink.server.interfaces.controller;
 
+import com.nova.pollink.server.api.dto.PushConfigRequest;
+import com.nova.pollink.server.api.dto.PushMessageRequest;
 import com.nova.pollink.server.application.service.MessageService;
 import com.nova.pollink.server.application.service.ConfigService;
 import com.nova.pollink.server.domain.entity.Message;
@@ -7,8 +9,6 @@ import com.nova.pollink.server.domain.entity.Config;
 import com.nova.pollink.server.interfaces.grpc.NodeGrpcClient;
 import com.nova.pollink.server.proto.NodeProto;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 /**
  * 数据推送控制器。
@@ -40,19 +40,16 @@ public class PushController {
      * @return 创建的消息
      */
     @PostMapping("/message")
-    public Message pushMessage(@RequestBody Map<String, Object> request) {
-        String topic = (String) request.get("topic");
-        String payload = (String) request.get("payload");
-        int expireSeconds = (int) request.getOrDefault("expireSeconds", 300);
-
-        Message message = messageService.createMessage(topic, payload, expireSeconds);
+    public Message pushMessage(@RequestBody PushMessageRequest request) {
+        Message message = messageService.createMessage(
+            request.getTopic(), request.getPayload(), request.getExpireSeconds());
         // 唤醒等待该 topic 的客户端
-        pollController.wakeupPendingPolls(topic);
+        pollController.wakeupPendingPolls(request.getTopic());
         // 向其他节点广播通知
         nodeGrpcClient.notifyPeers(
             String.valueOf(message.getId()),
             NodeProto.DataType.MESSAGE,
-            topic
+            request.getTopic()
         );
         return message;
     }
@@ -64,11 +61,8 @@ public class PushController {
      * @return 创建的配置
      */
     @PostMapping("/config")
-    public Config pushConfig(@RequestBody Map<String, Object> request) {
-        String key = (String) request.get("key");
-        String value = (String) request.get("value");
-
-        Config config = configService.createConfig(key, value);
+    public Config pushConfig(@RequestBody PushConfigRequest request) {
+        Config config = configService.createConfig(request.getKey(), request.getValue());
         configService.publishConfig(config.getId());
         // 唤醒等待配置的客户端
         pollController.wakeupPendingPolls("config");

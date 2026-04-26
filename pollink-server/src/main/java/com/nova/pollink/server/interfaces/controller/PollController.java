@@ -14,6 +14,7 @@ import org.springframework.web.context.request.async.DeferredResult;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 长轮询控制器。
@@ -29,9 +30,10 @@ public class PollController {
     private final GracefulShutdownConfig gracefulShutdownConfig;
 
     /**
-     * 存储等待中的轮询请求：key = "topic:clientId", value = DeferredResult
+     * 存储等待中的轮询请求：key = "topic:clientId:seq", value = DeferredResult
      */
     private final Map<String, DeferredResult<?>> pendingPolls = new ConcurrentHashMap<>();
+    private final AtomicLong pollSeq = new AtomicLong(0);
 
     public PollController(MessageService messageService,
                           ConfigService configService,
@@ -64,7 +66,7 @@ public class PollController {
             return reject;
         }
 
-        String key = topic + ":" + clientId;
+        String key = topic + ":" + clientId + ":" + pollSeq.incrementAndGet();
         DeferredResult<List<Message>> result = new DeferredResult<>((long) pollTimeoutSeconds * 1000);
 
         // 立即查询是否有数据
@@ -105,7 +107,7 @@ public class PollController {
             return reject;
         }
 
-        String key = "config:" + clientId;
+        String key = "config:" + clientId + ":" + pollSeq.incrementAndGet();
         DeferredResult<List<Config>> result = new DeferredResult<>((long) pollTimeoutSeconds * 1000);
 
         List<Config> configs = configService.pollConfigs(lastVersion);

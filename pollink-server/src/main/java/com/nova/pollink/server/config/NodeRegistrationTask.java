@@ -8,8 +8,10 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.net.InetAddress;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -26,14 +28,17 @@ public class NodeRegistrationTask {
     private final DiscoveryService discoveryService;
     private final DiscoveryProperties discoveryProperties;
     private final PollController pollController;
+    private final String configuredNodeIp;
     private final ScheduledExecutorService heartbeatExecutor;
 
     public NodeRegistrationTask(DiscoveryService discoveryService,
                                 DiscoveryProperties discoveryProperties,
-                                PollController pollController) {
+                                PollController pollController,
+                                @Value("${nova.pollink.server.node-ip:}") String configuredNodeIp) {
         this.discoveryService = discoveryService;
         this.discoveryProperties = discoveryProperties;
         this.pollController = pollController;
+        this.configuredNodeIp = configuredNodeIp;
         this.heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "discovery-heartbeat");
             t.setDaemon(true);
@@ -79,9 +84,13 @@ public class NodeRegistrationTask {
     }
 
     private String getSelfIp() {
+        if (configuredNodeIp != null && !configuredNodeIp.isBlank()) {
+            return configuredNodeIp;
+        }
         try {
-            return java.net.InetAddress.getLocalHost().getHostAddress();
+            return InetAddress.getLocalHost().getHostAddress();
         } catch (Exception e) {
+            log.warn("Failed to detect local IP, falling back to 127.0.0.1");
             return "127.0.0.1";
         }
     }
