@@ -131,12 +131,6 @@ public class PollController {
      *
      * @param topic 数据 topic（配置类型传 "config"）
      */
-    /**
-     * 当有新数据到达时，唤醒对应 topic 的等待请求。
-     * 由 gRPC 通知或数据写入接口调用。
-     *
-     * @param topic 数据 topic（配置类型传 "config"）
-     */
     public void wakeupPendingPolls(String topic) {
         pendingPolls.forEach((key, deferred) -> {
             if (key.startsWith(topic + ":")) {
@@ -161,5 +155,12 @@ public class PollController {
                 dr.setResult(List.of());
             }
         });
+    }
+
+    /**
+     * 返回当前 hold 中的轮询请求数量，用于心跳上报连接数。
+     */
+    public int getPendingPollCount() {
+        return pendingPolls.size();
     }
 }

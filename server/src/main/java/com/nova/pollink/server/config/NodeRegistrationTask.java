@@ -3,6 +3,7 @@ package com.nova.pollink.server.config;
 import com.nova.pollink.discovery.DiscoveryProperties;
 import com.nova.pollink.discovery.DiscoveryService;
 import com.nova.pollink.discovery.model.ServerNode;
+import com.nova.pollink.server.interfaces.controller.PollController;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -24,12 +25,15 @@ public class NodeRegistrationTask {
 
     private final DiscoveryService discoveryService;
     private final DiscoveryProperties discoveryProperties;
+    private final PollController pollController;
     private final ScheduledExecutorService heartbeatExecutor;
 
     public NodeRegistrationTask(DiscoveryService discoveryService,
-                                DiscoveryProperties discoveryProperties) {
+                                DiscoveryProperties discoveryProperties,
+                                PollController pollController) {
         this.discoveryService = discoveryService;
         this.discoveryProperties = discoveryProperties;
+        this.pollController = pollController;
         this.heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "discovery-heartbeat");
             t.setDaemon(true);
@@ -44,10 +48,12 @@ public class NodeRegistrationTask {
         discoveryService.register(node);
         log.info("Server node registered: {}", ip);
 
-        // 启动定时心跳
+        // 启动定时心跳（同时上报连接数）
         heartbeatExecutor.scheduleAtFixedRate(
             () -> {
                 try {
+                    int connectionCount = pollController.getPendingPollCount();
+                    discoveryService.updateConnectionCount(ip, connectionCount);
                     discoveryService.heartbeat(ip);
                 } catch (Exception e) {
                     log.warn("Heartbeat failed: {}", e.getMessage());
