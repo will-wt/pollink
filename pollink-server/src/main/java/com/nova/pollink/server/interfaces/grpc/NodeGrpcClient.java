@@ -6,6 +6,7 @@ import com.nova.pollink.server.proto.NodeProto;
 import com.nova.pollink.server.proto.NodeServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -33,6 +34,7 @@ public class NodeGrpcClient {
     private final DiscoveryService discoveryService;
     private final int grpcPort;
     private final String configuredNodeIp;
+    private final boolean usePlaintext;
 
     /** 已建立的节点连接：key = nodeId, value = StreamObserver */
     private final Map<String, StreamObserver<NodeProto.NodeMessage>> peerStreams = new ConcurrentHashMap<>();
@@ -41,10 +43,12 @@ public class NodeGrpcClient {
 
     public NodeGrpcClient(DiscoveryService discoveryService,
                           @Value("${nova.pollink.server.grpc-port:9101}") int grpcPort,
-                          @Value("${nova.pollink.server.node-ip:}") String configuredNodeIp) {
+                          @Value("${nova.pollink.server.node-ip:}") String configuredNodeIp,
+                          @Value("${nova.pollink.server.grpc-use-plaintext:true}") boolean usePlaintext) {
         this.discoveryService = discoveryService;
         this.grpcPort = grpcPort;
         this.configuredNodeIp = configuredNodeIp;
+        this.usePlaintext = usePlaintext;
     }
 
     @PostConstruct
@@ -99,7 +103,13 @@ public class NodeGrpcClient {
 
         peerStreams.forEach((nodeId, stream) -> {
             try {
+                if (stream instanceof ClientCallStreamObserver<?> clientStream && !clientStream.isReady()) {
+                    log.warn("Peer stream {} not ready, skipping notify", nodeId);
+                    return;
+                }
                 stream.onNext(msg);
+            } catch (IllegalStateException e) {
+                log.warn("Peer stream {} not ready: {}", nodeId, e.getMessage());
             } catch (Exception e) {
                 log.warn("Failed to notify peer {}: {}", nodeId, e.getMessage());
                 // 连接可能已断开，下次 refreshConnections 会重建
@@ -134,9 +144,11 @@ public class NodeGrpcClient {
     private void connectToPeer(ServerNode node) {
         String address = node.getIp() + ":" + grpcPort;
         try {
-            ManagedChannel channel = ManagedChannelBuilder.forTarget(address)
-                .usePlaintext()
-                .build();
+            ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(address);
+            if (usePlaintext) {
+                channelBuilder.usePlaintext();
+            }
+            ManagedChannel channel = channelBuilder.build();
 
             NodeServiceGrpc.NodeServiceStub stub = NodeServiceGrpc.newStub(channel);
             StreamObserver<NodeProto.NodeMessage> requestStream = stub.stream(new StreamObserver<>() {
