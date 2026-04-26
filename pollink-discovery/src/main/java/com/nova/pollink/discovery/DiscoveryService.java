@@ -1,6 +1,6 @@
 package com.nova.pollink.discovery;
 
-import com.nova.pollink.discovery.model.ServerNode;
+import com.nova.pollink.discovery.dal.entity.ServerNode;
 import java.util.List;
 
 /**
