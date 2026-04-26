@@ -1,7 +1,7 @@
 package com.nova.pollink.server.application.service;
 
 import com.nova.pollink.server.dal.entity.Config;
-import com.nova.pollink.server.domain.repository.ConfigRepository;
+import com.nova.pollink.server.dal.repository.ConfigRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

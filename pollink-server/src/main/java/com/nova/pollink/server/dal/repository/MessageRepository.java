@@ -1,4 +1,4 @@
-package com.nova.pollink.server.domain.repository;
+package com.nova.pollink.server.dal.repository;
 
 import com.nova.pollink.server.dal.entity.Message;
 import java.util.List;

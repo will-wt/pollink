@@ -1,8 +1,7 @@
-package com.nova.pollink.server.infrastructure.repository;
+package com.nova.pollink.server.dal.repository;
 
 import com.nova.pollink.server.dal.entity.Message;
 import com.nova.pollink.server.dal.mapper.MessageMapper;
-import com.nova.pollink.server.domain.repository.MessageRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
