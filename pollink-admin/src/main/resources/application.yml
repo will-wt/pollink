@@ -7,11 +7,12 @@ spring:
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    property-naming-strategy: SNAKE_CASE
 
 nova:
   pollink:
     admin:
-      # Server 节点的 HTTP 地址，admin 通过此地址调用 server 的 push 接口触发集群广播
       server-url: http://localhost:8080
 
 mybatis:
