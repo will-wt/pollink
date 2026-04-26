@@ -29,6 +29,9 @@ public class ConfigService {
         config.setValue(value);
         config.setVersion(1);
         config.setStatus(0);
+        LocalDateTime now = LocalDateTime.now();
+        config.setCreateTime(now);
+        config.setUpdateTime(now);
         configRepository.save(config);
         return config;
     }

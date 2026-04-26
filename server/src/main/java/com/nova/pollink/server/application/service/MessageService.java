@@ -33,9 +33,17 @@ public class MessageService {
         message.setTopic(topic);
         message.setPayload(payload);
         message.setStatus(0);
+        message.setCreateTime(LocalDateTime.now());
         message.setExpireTime(LocalDateTime.now().plusSeconds(expireSeconds));
         messageRepository.save(message);
         return message;
+    }
+
+    /**
+     * 清理已过期且未推送的消息。
+     */
+    public int cleanExpiredMessages() {
+        return messageRepository.cleanExpired();
     }
 
     /**
