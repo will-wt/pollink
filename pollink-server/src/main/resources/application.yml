@@ -8,6 +8,8 @@ nova:
       grpc-port: 9101
       # 长轮询 hold 超时时间（秒）
       poll-timeout-seconds: 30
+      # 节点 IP，留空则自动检测（Docker/K8s 环境下建议显式配置）
+      node-ip:
     discovery:
       type: mysql
       heartbeat-interval-seconds: 5
