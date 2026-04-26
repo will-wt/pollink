@@ -1,7 +1,7 @@
 package com.nova.pollink.discovery.impl;
 
 import com.nova.pollink.discovery.DiscoveryService;
-import com.nova.pollink.discovery.model.ServerNode;
+import com.nova.pollink.discovery.dal.entity.ServerNode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
