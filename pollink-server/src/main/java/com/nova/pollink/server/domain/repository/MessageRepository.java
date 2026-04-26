@@ -1,6 +1,6 @@
 package com.nova.pollink.server.domain.repository;
 
-import com.nova.pollink.server.domain.entity.Message;
+import com.nova.pollink.server.dal.entity.Message;
 import java.util.List;
 
 /**

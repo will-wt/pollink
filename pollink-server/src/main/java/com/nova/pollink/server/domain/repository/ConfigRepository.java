@@ -1,6 +1,6 @@
 package com.nova.pollink.server.domain.repository;
 
-import com.nova.pollink.server.domain.entity.Config;
+import com.nova.pollink.server.dal.entity.Config;
 import java.util.List;
 import java.util.Optional;
 

@@ -1,6 +1,6 @@
 package com.nova.pollink.server.application.service;
 
-import com.nova.pollink.server.domain.entity.Message;
+import com.nova.pollink.server.dal.entity.Message;
 import com.nova.pollink.server.domain.repository.MessageRepository;
 import org.springframework.stereotype.Service;
 
