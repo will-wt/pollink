@@ -8,6 +8,9 @@ const pages = {
     configs: renderConfigs
 };
 
+// 当前页面的定时刷新器
+let currentInterval = null;
+
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
     loadPage('dashboard');
@@ -24,6 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadPage(page) {
+    // 清除之前的定时刷新
+    if (currentInterval) {
+        clearInterval(currentInterval);
+        currentInterval = null;
+    }
+
     const content = document.getElementById('content');
     content.innerHTML = '<p>加载中...</p>';
     if (pages[page]) {
@@ -33,24 +42,36 @@ function loadPage(page) {
 
 async function fetchJSON(url) {
     const res = await fetch(url);
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
     return res.json();
 }
 
 // 概览页
 async function renderDashboard(container) {
-    const stats = await fetchJSON(`${API_BASE}/dashboard/stats`);
-    container.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-            <div class="card">
-                <h3>活跃节点</h3>
-                <div class="value">${stats.totalNodes}</div>
-            </div>
-            <div class="card">
-                <h3>总连接数</h3>
-                <div class="value">${stats.totalConnections}</div>
-            </div>
-        </div>
-    `;
+    async function update() {
+        try {
+            const stats = await fetchJSON(`${API_BASE}/dashboard/stats`);
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                    <div class="card">
+                        <h3>活跃节点</h3>
+                        <div class="value">${stats.totalNodes}</div>
+                    </div>
+                    <div class="card">
+                        <h3>总连接数</h3>
+                        <div class="value">${stats.totalConnections}</div>
+                    </div>
+                </div>
+            `;
+        } catch (e) {
+            container.innerHTML = `<p style="color: red;">加载失败: ${e.message}</p>`;
+        }
+    }
+    await update();
+    // 每 5 秒自动刷新
+    currentInterval = setInterval(update, 5000);
 }
 
 // 节点页
@@ -58,10 +79,11 @@ async function renderNodes(container) {
     const nodes = await fetchJSON(`${API_BASE}/nodes`);
     let html = '<h2>节点列表</h2><table><tr><th>ID</th><th>IP</th><th>状态</th><th>连接数</th><th>最后心跳</th></tr>';
     nodes.forEach(node => {
+        const statusMap = { 0: '离线', 1: '在线', 2: '维护中' };
         html += `<tr>
             <td>${node.id}</td>
             <td>${node.ip}</td>
-            <td>${node.status === 1 ? '在线' : '离线'}</td>
+            <td>${statusMap[node.status] || '未知'}</td>
             <td>${node.connectionCount}</td>
             <td>${node.lastHeartbeat}</td>
         </tr>`;
@@ -127,9 +149,9 @@ async function renderConfigs(container) {
                 <label>Value</label>
                 <textarea id="cfgValue" rows="2" placeholder="配置值" required></textarea>
             </div>
-            <button type="submit" class="btn btn-primary">创建配置</button>
+            <button type="submit" class="btn btn-primary">创建并发布</button>
         </form>
-        <table><tr><th>ID</th><th>Key</th><th>Value</th><th>Version</th><th>状态</th><th>操作</th></tr>`;
+        <table><tr><th>ID</th><th>Key</th><th>Value</th><th>Version</th><th>状态</th></tr>`;
     configs.forEach(cfg => {
         html += `<tr>
             <td>${cfg.id}</td>
@@ -137,7 +159,6 @@ async function renderConfigs(container) {
             <td>${cfg.value}</td>
             <td>${cfg.version}</td>
             <td>${cfg.status === 0 ? '草稿' : (cfg.status === 1 ? '已发布' : '已回滚')}</td>
-            <td>${cfg.status === 0 ? `<button class="btn btn-success" onclick="publishConfig(${cfg.id})">发布</button>` : ''}</td>
         </tr>`;
     });
     html += '</table>';
@@ -155,9 +176,4 @@ async function renderConfigs(container) {
         });
         renderConfigs(container);
     });
-}
-
-async function publishConfig(id) {
-    await fetch(`${API_BASE}/configs/${id}/publish`, { method: 'POST' });
-    renderConfigs(document.getElementById('content'));
 }

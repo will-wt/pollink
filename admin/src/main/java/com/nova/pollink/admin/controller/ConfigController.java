@@ -1,22 +1,31 @@
 package com.nova.pollink.admin.controller;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
 
 /**
  * 配置管理控制器。
+ * 查询操作直接访问数据库，写入操作通过 HTTP 调用 server 的 push 接口，
+ * 以触发 gRPC 集群广播和客户端唤醒。
  */
 @RestController
 @RequestMapping("/api/v1/admin/configs")
 public class ConfigController {
 
     private final JdbcTemplate jdbcTemplate;
+    private final RestTemplate restTemplate;
+    private final String serverUrl;
 
-    public ConfigController(JdbcTemplate jdbcTemplate) {
+    public ConfigController(JdbcTemplate jdbcTemplate,
+                            @Value("${nova.admin.server-url:http://localhost:8080}") String serverUrl) {
         this.jdbcTemplate = jdbcTemplate;
+        this.restTemplate = new RestTemplate();
+        this.serverUrl = serverUrl.endsWith("/") ? serverUrl.substring(0, serverUrl.length() - 1) : serverUrl;
     }
 
     @GetMapping
@@ -27,17 +36,8 @@ public class ConfigController {
 
     @PostMapping
     public Map<String, String> createConfig(@RequestBody Map<String, String> request) {
-        String key = request.get("key");
-        String value = request.get("value");
-        String sql = "INSERT INTO configs (`key`, value, version, status) VALUES (?, ?, 1, 0)";
-        jdbcTemplate.update(sql, key, value);
-        return Map.of("status", "ok");
-    }
-
-    @PostMapping("/{id}/publish")
-    public Map<String, String> publishConfig(@PathVariable Long id) {
-        String sql = "UPDATE configs SET status = 1, version = version + 1 WHERE id = ?";
-        jdbcTemplate.update(sql, id);
+        // 通过 server 的 push 接口创建并发布配置，确保触发 gRPC 集群广播
+        restTemplate.postForObject(serverUrl + "/api/v1/push/config", request, Map.class);
         return Map.of("status", "ok");
     }
 }
