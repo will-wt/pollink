@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -29,10 +28,10 @@ public class PollController {
     private final int pollTimeoutSeconds;
     private final GracefulShutdownConfig gracefulShutdownConfig;
 
-    /**
-     * 存储等待中的轮询请求：key = "topic:clientId:seq", value = DeferredResult
-     */
-    private final Map<String, DeferredResult<?>> pendingPolls = new ConcurrentHashMap<>();
+    /** 消息轮询等待：key = "topic:clientId:seq", value = DeferredResult */
+    private final ConcurrentHashMap<String, DeferredResult<List<Message>>> pendingMessagePolls = new ConcurrentHashMap<>();
+    /** 配置轮询等待：key = "config:clientId:seq", value = DeferredResult */
+    private final ConcurrentHashMap<String, DeferredResult<List<Config>>> pendingConfigPolls = new ConcurrentHashMap<>();
     private final AtomicLong pollSeq = new AtomicLong(0);
 
     public PollController(MessageService messageService,
@@ -77,11 +76,11 @@ public class PollController {
         }
 
         // 无数据时 hold 住请求，仅依赖 DeferredResult 内置超时
-        pendingPolls.put(key, result);
+        pendingMessagePolls.put(key, result);
 
-        result.onCompletion(() -> pendingPolls.remove(key));
+        result.onCompletion(() -> pendingMessagePolls.remove(key));
         result.onTimeout(() -> {
-            pendingPolls.remove(key);
+            pendingMessagePolls.remove(key);
             result.setResult(List.of());
         });
 
@@ -116,11 +115,11 @@ public class PollController {
             return result;
         }
 
-        pendingPolls.put(key, result);
+        pendingConfigPolls.put(key, result);
 
-        result.onCompletion(() -> pendingPolls.remove(key));
+        result.onCompletion(() -> pendingConfigPolls.remove(key));
         result.onTimeout(() -> {
-            pendingPolls.remove(key);
+            pendingConfigPolls.remove(key);
             result.setResult(List.of());
         });
 
@@ -134,27 +133,33 @@ public class PollController {
      * @param topic 数据 topic（配置类型传 "config"）
      */
     public void wakeupPendingPolls(String topic) {
-        pendingPolls.forEach((key, deferred) -> {
-            if (key.startsWith(topic + ":")) {
+        if ("config".equals(topic)) {
+            pendingConfigPolls.forEach((key, deferred) -> {
                 if (!deferred.isSetOrExpired()) {
-                    // 唤醒后由客户端重新发起请求获取数据
-                    @SuppressWarnings("unchecked")
-                    DeferredResult<Object> dr = (DeferredResult<Object>) (DeferredResult<?>) deferred;
-                    dr.setResult(List.of());
+                    deferred.setResult(List.of());
                 }
-            }
-        });
+            });
+        } else {
+            pendingMessagePolls.forEach((key, deferred) -> {
+                if (key.startsWith(topic + ":") && !deferred.isSetOrExpired()) {
+                    deferred.setResult(List.of());
+                }
+            });
+        }
     }
 
     /**
      * 唤醒所有等待中的轮询请求（用于优雅关闭）。
      */
     public void wakeupAllPendingPolls() {
-        pendingPolls.forEach((key, deferred) -> {
+        pendingMessagePolls.forEach((key, deferred) -> {
             if (!deferred.isSetOrExpired()) {
-                @SuppressWarnings("unchecked")
-                DeferredResult<Object> dr = (DeferredResult<Object>) (DeferredResult<?>) deferred;
-                dr.setResult(List.of());
+                deferred.setResult(List.of());
+            }
+        });
+        pendingConfigPolls.forEach((key, deferred) -> {
+            if (!deferred.isSetOrExpired()) {
+                deferred.setResult(List.of());
             }
         });
     }
@@ -163,6 +168,6 @@ public class PollController {
      * 返回当前 hold 中的轮询请求数量，用于心跳上报连接数。
      */
     public int getPendingPollCount() {
-        return pendingPolls.size();
+        return pendingMessagePolls.size() + pendingConfigPolls.size();
     }
 }
