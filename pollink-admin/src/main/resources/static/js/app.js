@@ -5,7 +5,8 @@ const pages = {
     dashboard: renderDashboard,
     nodes: renderNodes,
     messages: renderMessages,
-    configs: renderConfigs
+    configs: renderConfigs,
+    'gray-rules': renderGrayRules
 };
 
 // 当前页面的定时刷新器
@@ -175,5 +176,85 @@ async function renderConfigs(container) {
             })
         });
         renderConfigs(container);
+    });
+}
+
+// 灰度规则页
+async function renderGrayRules(container) {
+    const rules = await fetchJSON(`${API_BASE}/gray-rules`);
+    let html = `
+        <h2>灰度规则</h2>
+        <form id="grayForm" style="margin-bottom: 20px;">
+            <div class="form-group">
+                <label>规则名</label>
+                <input type="text" id="grName" placeholder="order_notify_10pct" required>
+            </div>
+            <div class="form-group">
+                <label>类型</label>
+                <select id="grType">
+                    <option value="1">消息</option>
+                    <option value="2">配置</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>目标ID</label>
+                <input type="number" id="grTargetId" placeholder="1" required>
+            </div>
+            <div class="form-group">
+                <label>过滤条件 (JSON)</label>
+                <textarea id="grFilterJson" rows="2" placeholder='{"pct": 10}' required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">创建规则</button>
+        </form>
+        <table><tr><th>ID</th><th>名称</th><th>类型</th><th>目标ID</th><th>过滤条件</th><th>状态</th><th>操作</th></tr>`;
+    rules.forEach(rule => {
+        const typeLabel = rule.type === 1 ? '消息' : '配置';
+        const statusLabel = rule.status === 1 ? '已启用' : '未启用';
+        html += `<tr>
+            <td>${rule.id}</td>
+            <td>${rule.name}</td>
+            <td>${typeLabel}</td>
+            <td>${rule.target_id}</td>
+            <td><code>${rule.filter_json}</code></td>
+            <td>${statusLabel}</td>
+            <td>
+                ${rule.status === 0
+                    ? `<button class="btn btn-success" data-action="enable" data-id="${rule.id}">启用</button>`
+                    : `<button class="btn btn-primary" data-action="disable" data-id="${rule.id}">禁用</button>`}
+                <button class="btn btn-danger" data-action="delete" data-id="${rule.id}">删除</button>
+            </td>
+        </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+
+    document.getElementById('grayForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await fetch(`${API_BASE}/gray-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: document.getElementById('grName').value,
+                type: parseInt(document.getElementById('grType').value),
+                targetId: parseInt(document.getElementById('grTargetId').value),
+                filterJson: document.getElementById('grFilterJson').value
+            })
+        });
+        renderGrayRules(container);
+    });
+
+    container.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            const action = e.target.dataset.action;
+            if (action === 'enable') {
+                await fetch(`${API_BASE}/gray-rules/${id}/enable`, { method: 'POST' });
+            } else if (action === 'disable') {
+                await fetch(`${API_BASE}/gray-rules/${id}/disable`, { method: 'POST' });
+            } else if (action === 'delete') {
+                await fetch(`${API_BASE}/gray-rules/${id}`, { method: 'DELETE' });
+            }
+            renderGrayRules(container);
+        });
     });
 }
